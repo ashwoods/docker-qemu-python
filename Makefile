@@ -30,40 +30,25 @@ build: ## Build the container - removed `arm32v6` for now
 			arm64v8 ) qemu_arch="aarch64" ;; \
 		esac ;  docker build --build-arg BASE=$$docker_arch/$(BASE) --build-arg QEMU_ARCH=$$qemu_arch -t $(DOCKER_REGISTRY)/$(REPO):$$docker_arch-latest . ; done 
 
-#build-nc: ## Build the container without caching
-#	docker build --no-cache . -t $(REPO) ubuntu
-
-build-manifest: ## Create docker manifest file
+manifest: ## Create docker manifest file
 	docker manifest create \
 		$(DOCKER_REGISTRY)/$(REPO):latest \
-		$(DOCKER_REGISTRY)/$(REPO):arm64v8-latest \
-		$(DOCKER_REGISTRY)/$(REPO):arm32v6-latest
-	docker manifest annotate $(DOCKER_REGISTRY)/$(REPO):latest $(DOCKER_REGISTRY)/$(REPO):arm32v6-latest --os linux --arch arm
+		$(DOCKER_REGISTRY)/$(REPO):arm64v8-latest
 	docker manifest annotate $(DOCKER_REGISTRY)/$(REPO):latest $(DOCKER_REGISTRY)/$(REPO):arm64v8-latest --os linux --arch arm64 --variant armv8
+	docker manifest push $(DOCKER_REGISTRY)/$(REPO):latest
+
+run: ## Run container
+	docker run --rm  --name="$(REPO)" $(REPO)
+
+release: build publish manifest ## Make a release by building and publishing the `{version}` ans `latest` tagged containers
+
+# Docker publish
+publish:  ## Publish the `{version}` ans `latest` tagged containers
+	for docker_arch in arm64v8 amd64 ; do \
+		docker push $(DOCKER_REGISTRY)/$(REPO):$$docker_arch-latest ; \
+	done
 
 run: ## Run container 
 	docker run --rm  --name="$(REPO)" $(REPO)
 
 release: build publish ## Make a release by building and publishing the `{version}` ans `latest` tagged containers 
-
-# Docker publish
-publish: publish-latest publish-version ## Publish the `{version}` ans `latest` tagged containers 
-
-publish-latest: tag-latest ## Publish the `latest` tagged container 
-	@echo 'publish latest to $(DOCKER_REGISTRY)/$(REPO)'
-	docker push $(DOCKER_REGISTRY)/$(REPO):latest
-
-publish-version: tag-version ## Publish the `{version}` taged container to ECR
-	@echo 'publish $(VERSION) to $(DOCKER_REGISTRY)'
-	docker push $(DOCKER_REGISTRY)/$(REPO):$(VERSION)
-
-# Docker tagging
-tag: tag-latest tag-version ## Generate container tags for the `{version}` ans `latest` tags
-
-tag-latest: ## Generate container `{version}` tag
-	@echo 'create tag latest'
-	docker tag $(REPO) $(DOCKER_REGISTRY)/$(REPO):latest
-
-tag-version: ## Generate container `latest` tag
-	@echo 'create tag $(VERSION)'
-	docker tag $(REPO) $(DOCKER_REGISTRY)/$(REPO):$(VERSION)
